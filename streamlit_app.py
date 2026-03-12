@@ -156,7 +156,7 @@ const OBJECTIONS={
   medium:["I don't want to switch just for a flashy benefit.","Can you show me how this is better than my current plan?","I don't want surprises later, especially with prescriptions."],
   hard:["I have heard agents promise things that were not true.","If this changes my doctors or drug costs, I am not doing it.","I need a clear reason in plain language, and I am still skeptical."]
 };
-let state={}; let lastAiMessage=''; let voiceRecognizer=null; let allVoices=[]; let selectedAiVoiceName=''; let selectedAgentVoiceName=''; const audioOnlyMode=true;
+let state={}; let lastAiMessage=''; let voiceRecognizer=null; let allVoices=[]; let selectedAiVoiceName=''; let selectedAgentVoiceName=''; const audioOnlyMode=true; let fallbackIndex=0; let transcriptHistory=[];
 const AI_VOICE_PROFILE={rate:0.86,pitch:0.68,volume:1};
 const rand=(arr)=>arr[Math.floor(Math.random()*arr.length)];
 const randInt=(min,max)=>Math.floor(Math.random()*(max-min+1))+min;
@@ -187,16 +187,117 @@ function selectPlan(index){state.planChosen=index;renderSunfire();}
 window.selectPlan=selectPlan;
 function hintText(){const hints={Introduction:'Confirm Part A/B, ZIP, and Medicaid/Extra Help, then ask permission for lookup.',Lookup:'Use MARx details: DOB, entitlement, LIS, uncovered months.', 'Needs Assessment':'Ask about PCP, specialists, medications, pharmacy, and priorities.', 'Plan Review':'Compare two plans using premium, MOOP, doctor fit, and total annual estimate.', Close:'Recommend clearly and ask for a compliant next step.'};return hints[state.stage]||'Keep fact-finding.';}
 const normalize=(text)=>text.toLowerCase().replace(/[^a-z0-9$ ]/g,' ');
-function difficultyObjection(){const arr=OBJECTIONS[state.difficulty]||OBJECTIONS.medium;return rand(arr);}
-function aiRespond(input){const t=normalize(input);updateChecklistFromText(input);if(/permission|may i proceed|look you up|look up/.test(t)&&state.stage==='Introduction')setStage('Lookup');if(/priority|important to you|what matters most/.test(t))setStage('Needs Assessment');if(/compare|hmo|ppo|option|premium|annual cost|moop|deductible/.test(t))setStage('Plan Review');if(/recommend|best fit|i would suggest/.test(t))setStage('Close');if(/(hello|hi|good morning|good afternoon)/.test(t)&&state.stage==='Introduction')return `${state.person.first} ${state.person.last} speaking.`;if(/part a|part b/.test(t))return 'Yes, I have both Medicare Part A and Part B.';if(/zip|county/.test(t))return `My ZIP code is ${state.location.zip} and I am in ${state.location.county} County.`;if(/medicaid|extra help|lis/.test(t)){if(state.medicaid)return 'Yes, I do receive Medicaid.';if(state.lis)return 'I do receive Extra Help on prescriptions.';return 'No, I do not receive Medicaid and I do not think I get Extra Help.';}if(/permission|may i proceed|look you up|look up/.test(t))return 'Yes, that is fine. What do you need from me?';if(/date of birth|dob/.test(t))return `My date of birth is ${state.dob}.`;if(/doctor|pcp|primary care/.test(t))return `My main doctor is ${state.pcp.name}.`;if(/specialist|hospital/.test(t))return `I also see ${state.specialist.name}.`;if(/medication|prescription|drug/.test(t))return `I take ${state.drugs.map(d=>d.name).join(', ')}.`;if(/pharmacy/.test(t))return `I usually use ${state.pharmacy}.`;if(/important to you|priority|what matters most/.test(t))return `The biggest thing for me is ${state.priority}.`;if(/hmo|ppo|premium|moop|annual cost|deductible|compare|option/.test(t)||/recommend|best fit|based on what you told me|i would suggest/.test(t))return difficultyObjection();if(/enroll|move forward|next step|review that option|go through that plan|how does that sound/.test(t))return state.difficulty==='hard'?'I am still hesitant. Please summarize risks and benefits one more time.':'I would want to hear it one more time before making a final decision, but that sounds reasonable.';const fallbacks={easy:'I am listening and this feels straightforward.',medium:'I am listening. I want to make sure the details are right.',hard:'I am cautious. Please be specific and do not rush me.'};return fallbacks[state.difficulty]||'Okay.';}
+function difficultyObjection(){const arr=OBJECTIONS[state.difficulty]||OBJECTIONS.medium;return rand(arr);} 
+function nextFallback(stage){
+  const lists={
+    Introduction:[
+      'Before we go further, can you confirm you are a licensed agent and this is a recorded call?',
+      'I am here. Please verify the basics first so we get this right.',
+      'Okay, I can continue. What information do you need from me first?'
+    ],
+    Lookup:[
+      'What did the lookup show for my current plan and entitlement?',
+      'Please walk me through what you found in MARx in simple terms.',
+      'Did you confirm my plan details before we compare options?'
+    ],
+    'Needs Assessment':[
+      'I care most about keeping my doctors and lowering drug cost. What else do you need?',
+      'I can answer more questions. I want to avoid surprises this year.',
+      'Please check that my doctors and pharmacy still work before recommending.'
+    ],
+    'Plan Review':[
+      'Can you compare my current plan against your best option side by side?',
+      'Please explain premium, drug cost, and total yearly cost together.',
+      'I do not want a sales pitch. Tell me why this is truly better for me.'
+    ],
+    Close:[
+      'Before I decide, summarize why this plan is best for my doctors and medications.',
+      'What is my next step if I agree with this recommendation?',
+      'Please give me one final summary in plain language.'
+    ]
+  };
+  const stageList=lists[stage]||lists.Introduction;
+  const msg=stageList[fallbackIndex%stageList.length];
+  fallbackIndex+=1;
+  return msg;
+}
+function aiRespond(input){
+  const t=normalize(input);
+  updateChecklistFromText(input);
+  transcriptHistory.push(t);
+
+  if(/permission|may i proceed|look you up|look up/.test(t)&&state.stage==='Introduction')setStage('Lookup');
+  if(/priority|important to you|what matters most/.test(t))setStage('Needs Assessment');
+  if(/compare|hmo|ppo|option|premium|annual cost|moop|deductible/.test(t))setStage('Plan Review');
+  if(/recommend|best fit|i would suggest/.test(t))setStage('Close');
+
+  if(/(hello|hi|good morning|good afternoon)/.test(t)&&state.stage==='Introduction')return `${state.person.first} ${state.person.last} speaking.`;
+  if(/part a|part b/.test(t))return 'Yes, I have both Medicare Part A and Part B.';
+  if(/zip|county/.test(t))return `My ZIP code is ${state.location.zip} and I am in ${state.location.county} County.`;
+  if(/medicaid|extra help|lis/.test(t)){
+    if(state.medicaid)return 'Yes, I do receive Medicaid.';
+    if(state.lis)return 'I do receive Extra Help on prescriptions.';
+    return 'No, I do not receive Medicaid and I do not think I get Extra Help.';
+  }
+  if(/other coverage|va|tricare|employer/.test(t))return state.otherCoverage?'I may have had other coverage before, but I do not remember every detail.':'No, nothing like that right now.';
+  if(/permission|may i proceed|look you up|look up/.test(t))return 'Yes, that is fine. What do you need from me?';
+  if(/date of birth|dob/.test(t))return `My date of birth is ${state.dob}.`;
+  if(/address|street|city|state/.test(t))return `My address is ${state.address}.`;
+  if(/doctor|pcp|primary care/.test(t))return `My main doctor is ${state.pcp.name}.`;
+  if(/specialist|hospital/.test(t))return `I also see ${state.specialist.name}. Keeping my doctors matters to me.`;
+  if(/medication|prescription|drug/.test(t))return `I take ${state.drugs.map(d=>d.name).join(', ')}.`;
+  if(/pharmacy/.test(t))return `I usually use ${state.pharmacy}.`;
+  if(/important to you|priority|what matters most/.test(t))return `The biggest thing for me is ${state.priority}.`;
+  if(/lep|late enrollment|uncovered months|creditable coverage|63 days|penalty/.test(t))return state.uncoveredMonths>0?'I had a gap before, but I do not remember exact dates.':'As far as I know, I did not have a long break in drug coverage.';
+  if(/current plan|what do i have now|what plan am i on/.test(t))return `Right now I have ${state.currentPlan.carrier} ${state.currentPlan.name}.`;
+
+  if(/hmo|ppo|premium|moop|annual cost|deductible|compare|option/.test(t)){
+    return `${difficultyObjection()} Also compare it to my current ${state.currentPlan.carrier} plan so I can understand the difference.`;
+  }
+  if(/recommend|best fit|based on what you told me|i would suggest/.test(t)){
+    return `${difficultyObjection()} Tell me the top two reasons this is better for me specifically.`;
+  }
+  if(/enroll|move forward|next step|review that option|go through that plan|how does that sound/.test(t)){
+    return state.difficulty==='hard'?'I am still cautious. Please repeat costs, doctor fit, and pharmacy one more time.':'That sounds reasonable. Please summarize costs and doctor coverage one last time.';
+  }
+
+  return nextFallback(state.stage);
+}
 function scoreCall(){const c=state.checklist;const items=[];let points=0;const add=(label,pass,detail,value)=>{items.push({label,pass,detail});if(pass)points+=value;};add('Opening and eligibility',c.greet&&c.partAB,c.greet&&c.partAB?'The agent opened appropriately and confirmed Part A and Part B.':'Open professionally and verify Part A/Part B.',12);add('Lookup setup',c.zip&&c.permission,c.zip&&c.permission?'ZIP/county and permission were covered.':'Verify location and ask permission before lookup.',10);add('MARx usage',c.marx,c.marx?'MARx was used.':'Use the MARx panel.',10);add('Discovery',c.medicaid&&c.doctors&&c.meds&&c.needs,c.medicaid&&c.doctors&&c.meds&&c.needs?'Coverage, doctors, meds, and priorities were gathered.':'Complete full discovery before recommending.',22);add('SunFire usage',c.sunfire&&c.planCompare,c.sunfire&&c.planCompare?'SunFire and comparison used.':'Compare two options in SunFire.',15);add('Recommendation quality',c.recommendation&&state.planChosen!==null,c.recommendation&&state.planChosen!==null?`Recommendation given with selected plan ${state.plans[state.planChosen].carrier} ${state.plans[state.planChosen].name}.`:'Give a needs-based recommendation and select plan.',15);add('Uncovered months / LEP handling',state.uncoveredMonths===0||c.lep,state.uncoveredMonths===0?'No special LEP handling needed.':(c.lep?'LEP handled carefully.':'Address uncovered months and possible LEP carefully.'),8);add('Close / next step',c.close,c.close?'A next step was offered.':'Move to a clear next step.',8);state.score={points,items,summary:points>=90?'Strong roleplay.':points>=75?'Solid structure with room to tighten recommendations.':'Needs more structure and complete discovery.'};renderScorecard(state.score);switchTab('score');addMessage('system',`Score complete: ${points}/100.`);}
 function getVoiceByName(name){return allVoices.find(v=>v.name===name)||null;}
-function pickGrouchyVoice(options){const preferredNames=['david','fred','george','grandpa','oldman','male','baritone','microsoft mark','microsoft david','google uk english male','en-us-neural2-j','en-us-neural2-d'];const found=options.find(v=>preferredNames.some(k=>v.name.toLowerCase().includes(k)));return found||options[0];}
-function populateVoiceSelects(){allVoices=window.speechSynthesis?window.speechSynthesis.getVoices():[];const preferred=allVoices.filter(v=>v.lang.toLowerCase().startsWith('en'));const options=(preferred.length?preferred:allVoices);const aiSel=document.getElementById('aiVoiceSelect');const agSel=document.getElementById('agentVoiceSelect');aiSel.innerHTML='';agSel.innerHTML='';if(!options.length){aiSel.innerHTML='<option>No voices available</option>';agSel.innerHTML='<option>No voices available</option>';return;}
-options.forEach(v=>{const label=`${v.name} (${v.lang})`;aiSel.add(new Option(label,v.name));agSel.add(new Option(label,v.name));});if(!selectedAiVoiceName)selectedAiVoiceName=pickGrouchyVoice(options).name;if(!selectedAgentVoiceName)selectedAgentVoiceName=options[0].name;aiSel.value=selectedAiVoiceName;agSel.value=selectedAgentVoiceName;}
+function pickKarenVoice(options){
+  const karen=options.find(v=>v.name.toLowerCase().includes('karen')&&v.lang.toLowerCase().includes('en-au'));
+  if(karen)return {primary:karen,secondary:null};
+  const anyKaren=options.find(v=>v.name.toLowerCase().includes('karen'));
+  if(anyKaren)return {primary:anyKaren,secondary:null};
+  const alt=options.find(v=>v.lang.toLowerCase().includes('en-au'))||options.find(v=>v.lang.toLowerCase().startsWith('en'))||options[0];
+  return {primary:alt,secondary:null};
+}
+function populateVoiceSelects(){
+  allVoices=window.speechSynthesis?window.speechSynthesis.getVoices():[];
+  const preferred=allVoices.filter(v=>v.lang.toLowerCase().startsWith('en'));
+  const options=(preferred.length?preferred:allVoices);
+  const aiSel=document.getElementById('aiVoiceSelect');
+  const agSel=document.getElementById('agentVoiceSelect');
+  aiSel.innerHTML='';
+  agSel.innerHTML='';
+  if(!options.length){
+    aiSel.innerHTML='<option>No voices available</option>';
+    agSel.innerHTML='<option>No voices available</option>';
+    return;
+  }
+  const chosen=pickKarenVoice(options);
+  const aiOptions=[chosen.primary].filter(Boolean);
+  aiOptions.forEach(v=>aiSel.add(new Option(`${v.name} (${v.lang})`,v.name)));
+  options.forEach(v=>agSel.add(new Option(`${v.name} (${v.lang})`,v.name)));
+  selectedAiVoiceName=chosen.primary.name;
+  if(!selectedAgentVoiceName)selectedAgentVoiceName=options[0].name;
+  aiSel.value=selectedAiVoiceName;
+  agSel.value=selectedAgentVoiceName;
+}
 function speakText(text,voiceName){if(!('speechSynthesis' in window)){alert('Speech synthesis is not supported in this browser.');return;}if(!text)return;window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);const voice=getVoiceByName(voiceName);if(voice)utterance.voice=voice;if(voiceName===selectedAiVoiceName){utterance.rate=AI_VOICE_PROFILE.rate;utterance.pitch=AI_VOICE_PROFILE.pitch;utterance.volume=AI_VOICE_PROFILE.volume;}else{utterance.rate=1;utterance.pitch=1;}window.speechSynthesis.speak(utterance);}
 function speakLastMessage(){speakText(lastAiMessage,selectedAiVoiceName);}
-function randomizeAiVoice(){if(!allVoices.length)populateVoiceSelects();const options=allVoices.filter(v=>v.lang.toLowerCase().startsWith('en'));const chosen=rand(options.length?options:allVoices);if(!chosen)return;selectedAiVoiceName=chosen.name;document.getElementById('aiVoiceSelect').value=chosen.name;setStatus(`AI client voice set to ${chosen.name}.`);}
+function randomizeAiVoice(){populateVoiceSelects();setStatus(`AI client voice locked to ${selectedAiVoiceName} for realism.`);}
 async function requestMicPermission(){
   const candidates=[window,window.parent,window.top];
   const tried=[];
