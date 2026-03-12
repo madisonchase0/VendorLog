@@ -252,13 +252,17 @@ function aiRespond(input){
   if(/address|street|city|state/.test(t))return `My address is ${state.address}.`;
   if(/doctor|pcp|primary care/.test(t))return `My main doctor is ${state.pcp.name}.`;
   if(/specialist|hospital/.test(t))return `I also see ${state.specialist.name}. Keeping my doctors matters to me.`;
-  if(/medication|prescription|drug/.test(t))return `I take ${state.drugs.map(d=>d.name).join(', ')}.`;
+  if(/(drug cost|prescription cost|annual drug|total yearly cost|yearly cost|maximum out of pocket|out of pocket|moop|premium|deductible)/.test(t) && /(current plan|this plan|that plan|your plan|would be|save|lower|higher|difference|compare|total)/.test(t))return 'That explanation helps. Please also confirm my doctor network and pharmacy before we decide.';
+  if(/(what|which|list|take|on).*(medication|prescription|drug)|medication list|what do you take/.test(t))return `I take ${state.drugs.map(d=>d.name).join(', ')}.`;
   if(/pharmacy/.test(t))return `I usually use ${state.pharmacy}.`;
   if(/important to you|priority|what matters most/.test(t))return `The biggest thing for me is ${state.priority}.`;
   if(/lep|late enrollment|uncovered months|creditable coverage|63 days|penalty/.test(t))return state.uncoveredMonths>0?'I had a gap before, but I do not remember exact dates.':'As far as I know, I did not have a long break in drug coverage.';
   if(/current plan|what do i have now|what plan am i on/.test(t))return `Right now I have ${state.currentPlan.carrier} ${state.currentPlan.name}.`;
 
   if(/hmo|ppo|premium|moop|annual cost|deductible|compare|option/.test(t)){
+    if(/current plan is|this one would|you would save|difference is|total yearly|your moop is|drug costs? are|estimated/.test(t)){
+      return 'Got it. That comparison is clearer. Please confirm doctor and pharmacy fit one more time.';
+    }
     state.awaitingMbiPrompt=true;
     return `${difficultyObjection()} Also compare it to my current ${state.currentPlan.carrier} plan so I can understand the difference.`;
   }
