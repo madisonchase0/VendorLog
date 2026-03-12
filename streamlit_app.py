@@ -243,7 +243,8 @@ function aiRespond(input){
   if(/permission|may i proceed|look you up|look up/.test(t))return 'Yes, that is fine. What do you need from me?';
   if(/date of birth|dob/.test(t))return `My date of birth is ${state.dob}.`;
   if(/medicare number|mbi|member id|card number|red white and blue/.test(t)){
-    if(state.awaitingMbiPrompt||state.marxRevealed){
+    const hasReason=/look you up|pull you up|verify|confirm|check|medicare system|beneficiary lookup|marx|enrollment/.test(t);
+    if(state.awaitingMbiPrompt||state.marxRevealed||hasReason){
       state.awaitingMbiPrompt=false;
       return `Yes, I have my card. For training you can use Medicare number ${state.mbi}.`;
     }
