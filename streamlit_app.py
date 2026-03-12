@@ -1807,7 +1807,10 @@ function renderConversationTemplate(text){
     .replaceAll('{PCP}', state.pcp.name)
     .replaceAll('{SPECIALIST}', state.specialist.name)
     .replaceAll('{PLAN}', `${state.currentPlan.carrier} ${state.currentPlan.name}`)
-    .replaceAll('{PHARMACY}', state.pharmacy);
+    .replaceAll('{PHARMACY}', state.pharmacy)
+    .replace(/\s*\[(Flow|Supplement)\s+\d+\]/gi,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
 }
 function difficultyObjection(){const arr=OBJECTIONS[state.difficulty]||OBJECTIONS.medium;return rand(arr);} 
 const CONVERSATION_SUPPLEMENTS = [
@@ -1977,6 +1980,16 @@ function aiRespond(input){
     if(state.lis)return 'I do receive Extra Help on prescriptions.';
     return 'No, I do not receive Medicaid and I do not think I get Extra Help.';
   }
+  if(/how are you|doing today/.test(t))return 'I am doing well, thank you for asking.';
+  if(/recorded line|licensed agent|platinum/.test(t))return 'Thank you for confirming. I am comfortable continuing.';
+  if(/tpmo|we do not offer every plan|represent\s+\d+|organizations/.test(t))return 'Okay, thank you for reading that disclaimer.';
+  if(/phone number|call disconnect|permission to contact you back|call you back/.test(t))return 'Yes, if we disconnect you have my permission to call me back.';
+  if(/not affiliated with|government agency|scope of appointment|discuss benefits/.test(t))return 'Yes, I give you permission to discuss benefits with me today.';
+  if(/make your own healthcare decisions/.test(t))return 'Yes, I make my own healthcare decisions.';
+  if(/legal power of attorney|power of attorney/.test(t))return 'No, I do not have a legal power of attorney involved right now.';
+  if(/nursing home|long.?term care|group home|hospitalized/.test(t))return 'No, I am not in a nursing home, long-term care facility, group home, or hospitalized.';
+  if(/anyone else.*household.*medicare/.test(t))return 'No, it is just me in the household with Medicare.';
+  if(/email address/.test(t))return 'You can skip email for now; I prefer phone contact.';
   if(/other coverage|va|tricare|employer/.test(t))return state.otherCoverage?'I may have had other coverage before, but I do not remember every detail.':'No, nothing like that right now.';
   if(/permission|may i proceed|look you up|look up/.test(t))return 'Yes, that is fine. What do you need from me?';
   if(/date of birth|dob/.test(t))return `My date of birth is ${state.dob}.`;
@@ -2010,8 +2023,9 @@ function aiRespond(input){
     return `${difficultyObjection()} Tell me the top two reasons this is better for me specifically.`;
   }
   if(/enroll|move forward|next step|review that option|go through that plan|how does that sound/.test(t)){
-    return state.difficulty==='hard'?'I am still cautious. Please repeat costs, doctor fit, and pharmacy one more time.':'That sounds reasonable. Please summarize costs and doctor coverage one last time.';
+    return state.difficulty==='hard'?'I am still cautious. Please repeat costs, doctor fit, and pharmacy one more time.':'That sounds reasonable. Please summarize costs and doctor coverage one last time, then we can proceed.';
   }
+  if(/welcome package|member id cards|7.?14 business days|customer service number|enrollment code|text opt.?in/.test(t))return 'Perfect, I wrote that down. Thank you for walking me through everything clearly.';
 
   return nextFallback(state.stage);
 }
