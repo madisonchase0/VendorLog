@@ -3,6 +3,20 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Medicare MARx + SunFire Roleplay Simulator", layout="wide")
 
+st.title("Medicare MARx + SunFire Roleplay Simulator")
+st.caption("If the simulator appears blank, hard refresh the browser and verify JavaScript is enabled.")
+
+with st.expander("Troubleshooting: simulator or voice controls not working"):
+    st.markdown(
+        """
+- Use **Chrome or Edge** for best Web Speech API support.
+- **Voice input** requires microphone permission and usually a secure context (HTTPS or localhost).
+- In some hosted iframe environments, browser speech APIs may be restricted by policy.
+- If speech is unavailable, the simulator still works with typed input and text responses.
+- Run locally with: `streamlit run streamlit_app.py`.
+        """
+    )
+
 APP_HTML = r"""
 <!DOCTYPE html>
 <html lang="en">
