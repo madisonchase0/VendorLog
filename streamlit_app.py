@@ -8,7 +8,7 @@ st.write(
 st.set_page_config(page_title="Medicare MARx + SunFire Roleplay Simulator", layout="wide")
 
 st.title("Medicare MARx + SunFire Roleplay Simulator")
-st.caption("Audio-only mode enabled: click Start listening to trigger microphone permission, then speak; AI replies use a grouchy old-man voice profile.")
+st.caption("Audio-only mode enabled: click Start listening (it will request mic permission when browser policy allows), then speak; AI replies use a grouchy old-man voice profile.")
 
 with st.expander("Troubleshooting: simulator or voice controls not working"):
     st.markdown(
@@ -197,7 +197,29 @@ options.forEach(v=>{const label=`${v.name} (${v.lang})`;aiSel.add(new Option(lab
 function speakText(text,voiceName){if(!('speechSynthesis' in window)){alert('Speech synthesis is not supported in this browser.');return;}if(!text)return;window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);const voice=getVoiceByName(voiceName);if(voice)utterance.voice=voice;if(voiceName===selectedAiVoiceName){utterance.rate=AI_VOICE_PROFILE.rate;utterance.pitch=AI_VOICE_PROFILE.pitch;utterance.volume=AI_VOICE_PROFILE.volume;}else{utterance.rate=1;utterance.pitch=1;}window.speechSynthesis.speak(utterance);}
 function speakLastMessage(){speakText(lastAiMessage,selectedAiVoiceName);}
 function randomizeAiVoice(){if(!allVoices.length)populateVoiceSelects();const options=allVoices.filter(v=>v.lang.toLowerCase().startsWith('en'));const chosen=rand(options.length?options:allVoices);if(!chosen)return;selectedAiVoiceName=chosen.name;document.getElementById('aiVoiceSelect').value=chosen.name;setStatus(`AI client voice set to ${chosen.name}.`);}
-async function requestMicPermission(){if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus('Microphone permission API unavailable in this browser. Use Chrome/Edge on HTTPS or localhost.');return false;}try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());return true;}catch(err){setStatus('Microphone permission denied or blocked. Click the lock icon in your browser and allow microphone access.');return false;}}
+async function requestMicPermission(){
+  const candidates=[window,window.parent,window.top];
+  const tried=[];
+  for(const ctx of candidates){
+    try{
+      if(ctx&&ctx.navigator&&ctx.navigator.mediaDevices&&ctx.navigator.mediaDevices.getUserMedia){
+        const stream=await ctx.navigator.mediaDevices.getUserMedia({audio:true});
+        stream.getTracks().forEach(t=>t.stop());
+        return true;
+      }
+      tried.push('no-mediaDevices');
+    }catch(err){
+      const code=(err&&err.name)||'unknown';
+      tried.push(code);
+      if(code==='NotAllowedError'||code==='SecurityError'){
+        setStatus('Microphone blocked. Use the browser lock/site-settings icon to allow microphone, then try again.');
+        return false;
+      }
+    }
+  }
+  setStatus('Could not directly request mic permission here; trying speech recognition start anyway.');
+  return true;
+}
 function setupVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){alert('Speech recognition is not supported in this browser.');return null;}const rec=new SR();rec.lang='en-US';rec.interimResults=false;rec.continuous=true;rec.onresult=(event)=>{const text=event.results[event.results.length-1][0].transcript.trim();if(!text)return;document.getElementById('lastTranscript').textContent=`Last transcript: ${text}`;handleAgentUtterance(text);};rec.onerror=(event)=>{const code=event&&event.error?event.error:'unknown';if(code==='not-allowed'||code==='service-not-allowed'){setStatus('Microphone blocked. Allow microphone permission and try Start listening again.');}else{setStatus(`Voice input error: ${code}.`);}};rec.onstart=()=>setStatus('Listening for agent speech...');rec.onend=()=>setStatus('Voice input stopped.');return rec;}
 function handleAgentUtterance(text){if(!text)return;if(!state.started)startCall();addMessage('agent',text);const reply=aiRespond(text);addMessage('client',reply);setStatus(`Stage: ${state.stage}. Continue the roleplay.`);}
 function forceObjection(){addMessage('client',difficultyObjection());}
