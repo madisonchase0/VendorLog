@@ -1,9 +1,9 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/README.md b/README.md
-index 41174bebf3a0f64fcf715b1a16f8c4122d17488b..9b70e073cc5620556462538b1567bd0d09f1f531 100644
+index 41174bebf3a0f64fcf715b1a16f8c4122d17488b..0cc555f367fa6e0de588cee39352699c3b8eef87 100644
 --- a/README.md
 +++ b/README.md
-@@ -1,19 +1,31 @@
+@@ -1,19 +1,53 @@
 -# 🎈 Blank app template
 +# Medicare MARx + SunFire Roleplay Simulator
  
@@ -30,9 +30,6 @@ index 41174bebf3a0f64fcf715b1a16f8c4122d17488b..9b70e073cc5620556462538b1567bd0d
 -2. Run the app
 +## Run locally
  
--   ```
--   $ streamlit run streamlit_app.py
--   ```
 +```bash
 +pip install -r requirements.txt
 +streamlit run streamlit_app.py
@@ -47,6 +44,30 @@ index 41174bebf3a0f64fcf715b1a16f8c4122d17488b..9b70e073cc5620556462538b1567bd0d
 +3. Use Chrome/Edge for best voice API compatibility.
 +4. Voice input may fail in some hosted iframe environments due to browser policy.
 +5. Even without voice support, typing in the chat still works.
++
++## Common deployment error
++
++If you see an error like:
++
++```
++File "/mount/src/vendorlog/streamlit_app.py", line 1
++  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF'
++IndentationError: unexpected indent
++```
++
++then `streamlit_app.py` in GitHub was accidentally overwritten with shell patch text instead of Python code.
++
++Fix:
++
++1. Open `streamlit_app.py` in GitHub and confirm it starts with:
++   ```python
++   import streamlit as st
++   import streamlit.components.v1 as components
+    ```
+-   $ streamlit run streamlit_app.py
+-   ```
++2. If not, replace the file with the correct Python version from this branch.
++3. Commit and redeploy.
  
 EOF
 )
